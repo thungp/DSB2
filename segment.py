@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import dicom
+import pydicom
 import json
 import os
 import random
@@ -177,17 +177,17 @@ class Dataset(object):
         return os.path.join(self.directory,"sax_%d" % s, "IM-%04d-%04d.dcm" % (self.slices_map[s], t))
 
     def _read_dicom_image(self, filename):
-        d = dicom.read_file(filename)
+        d = pydicom.read_file(filename)
         img = d.pixel_array
         return np.array(img)
 
     def _read_all_dicom_images(self):
         f1 = self._filename(self.slices[0], self.time[0])
-        d1 = dicom.read_file(f1)
+        d1 = pydicom.read_file(f1)
         (x, y) = d1.PixelSpacing
         (x, y) = (float(x), float(y))
         f2 = self._filename(self.slices[1], self.time[0])
-        d2 = dicom.read_file(f2)
+        d2 = pydicom.read_file(f2)
 
         # try a couple of things to measure distance between slices
         try:
