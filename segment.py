@@ -18,9 +18,10 @@ from scipy.optimize import curve_fit
 from scipy.interpolate import UnivariateSpline
 
 #ChangeLog
-# PT: Modified code entry to handle processing a range of studies between [1, 500)
-# Eg. argv ['D:/data/code/python/DSB2/segment.py', 'D:\\data\\datasets\\kaggle\\heart_disease','1', '3']
-# If the length is 4, then treat last two values start and end values of a range t
+# PT/TG-3: Modified code entry to handle processing a range of studies between [1, 500)
+#   Eg. argv ['D:/data/code/python/DSB2/segment.py', 'D:\\data\\datasets\\kaggle\\heart_disease','1', '3']
+#   If the length is 4, then treat last two values start and end values of a range not inclusive for end.as
+#   Example Script Parameters: D:\data\datasets\kaggle\heart_disease 1 3
 # PARAMETERS
 #
 
