@@ -26,7 +26,7 @@ import time
 #   If the length is 4, then treat last two values start and end values of a range not inclusive for end.as
 #   Example Script Parameters: D:\data\datasets\kaggle\heart_disease 1 3
 # PT/TG-2: added code to store results in DB, also fixed error: Getting os.mkdir("output") WindowsError: Error 5) Access is denied: 'output', added 1 second sleep to see if it helps.
-
+# PT/TG-1: Able to persist results of algorithm into Relational database
 # PARAMETERS
 #
 # number of bins to use in histogram for gaussian regression
