@@ -16,16 +16,19 @@ from scipy.spatial.distance import euclidean
 from scipy.stats import linregress
 from scipy.optimize import curve_fit
 from scipy.interpolate import UnivariateSpline
+import MySQLdb
+import timeit
+import time
 
 #ChangeLog
 # PT/TG-3: Modified code entry to handle processing a range of studies between [1, 500)
 #   Eg. argv ['D:/data/code/python/DSB2/segment.py', 'D:\\data\\datasets\\kaggle\\heart_disease','1', '3']
 #   If the length is 4, then treat last two values start and end values of a range not inclusive for end.as
 #   Example Script Parameters: D:\data\datasets\kaggle\heart_disease 1 3
+# PT/TG-2: added code to store results in DB, also fixed error: Getting os.mkdir("output") WindowsError: Error 5) Access is denied: 'output', added 1 second sleep to see if it helps.
+
 # PARAMETERS
 #
-
-
 # number of bins to use in histogram for gaussian regression
 NUM_BINS = 100
 # number of standard deviations past which we will consider a pixel an outlier
@@ -41,11 +44,100 @@ COMPONENT_INDEX_TOLERANCE = 20
 # number of angles to search when looking for the correct orientation
 ANGLE_SLICES = 36
 
+RUN_NUM = 0
+
+#HostName for MySQL DB Connection
+HOSTNAME = 'localhost'
+#DB Username that has privileges to write to respective datbase
+USERNAME = 'testuser'
+#DB PASSWORD that is related to USERNAME
+PASSWORD = 'test123'
+#DB or SCEMA name
+SCHEMA_NAME = 'TESTDB'
 
 #
 # FUNCTIONS
 #
+def insertEntry(dset):
+    logentry = "Inserting Entry (" + dset.name + ") into DB..."
+    log(logentry, 1)
+    # Open database connection
+    db = MySQLdb.connect(HOSTNAME, USERNAME, PASSWORD, SCHEMA_NAME)
 
+    # prepare a cursor object using cursor() method
+    cursor = db.cursor()
+
+    # Prepare SQL query to INSERT a record into the database.
+#    if dset.valid:
+    sql = "INSERT INTO RESULTS( \
+          duration, ejection_fraction, dataset_name, actual_edv, actual_esv, predicted_edv, predicted_esv, \
+          valid, num_bins, std_multiplier, threshold_area, angle_slices, run_num) \
+          VALUES ('%d', '%f', '%s', '%f', '%f', '%f', '%f', \
+          '%d', '%d', '%d', '%d', '%d', '%d')" % \
+          (dset.duration, dset.ef, dset.name, dset.aedv, dset.aesv, dset.edv, dset.esv, \
+           dset.valid, NUM_BINS, STD_MULTIPLIER, THRESHOLD_AREA, ANGLE_SLICES, RUN_NUM)
+#    else:
+#        sql = "INSERT INTO RESULTS( valid, duration, dataset_name, run_num, ejection_fraction, predicted_edv, predicted_esv, \
+#                                    ) \
+#          VALUES ('%d', '%d', '%s', '%d', '%f', '%f', '%f')" % \
+#          (dset.valid, dset.duration, dset.name, RUN_NUM, dset.ef, dset.edv, dset.esv)
+    try:
+        # Execute the SQL command
+        cursor.execute(sql)
+        # Commit your changes in the database
+        db.commit()
+    except MySQLdb.Error, e:
+        try:
+            logentry = "MySQL Error [%d]: %s" % (e.args[0], e.args[1])
+            log(logentry, 1)
+        except IndexError:
+            logentry = "MySQL Error: %s" % str(e)
+            log(logentry, 1)
+        # Rollback in case there is any error
+        db.rollback()
+
+    # disconnect from server
+    db.close()
+
+#Should only be run once per code run
+def setMaxRunNum():
+    global RUN_NUM
+    logentry = "Getting Max Run Num in global variable RUN_NUM..."
+    log(logentry, 1)
+    # Open database connection
+    db = MySQLdb.connect(HOSTNAME, USERNAME, PASSWORD, SCHEMA_NAME)
+
+    # prepare a cursor object using cursor() method
+    cursor = db.cursor()
+
+    # Prepare SQL query to INSERT a record into the database.
+#    if dset.valid:
+    sql = "SELECT max(run_num) as max_run_num FROM results;"
+
+    try:
+        # Execute the SQL command
+        cursor.execute(sql)
+        # Fetch all the rows in a list of lists.
+        results = cursor.fetchall()
+
+        for row in results:
+            max_run_num = row[0]  #incase it comes back as a string coerce it
+            # Now print fetched result
+            if max_run_num == None:
+                max_run_num = 0
+            logentry = "max_run_num=%s" % (max_run_num)
+            log(logentry, 1)
+            RUN_NUM = int(max_run_num) + 1
+
+    except MySQLdb.Error, e:
+        try:
+            logentry = "MySQL Error [%d]: %s" % (e.args[0], e.args[1])
+            log(logentry, 1)
+        except IndexError:
+            logentry = "MySQL Error: %s" % str(e)
+            log(logentry, 1)
+    # disconnect from server
+    db.close()
 
 def log(msg, lvl):
     string = ""
@@ -56,6 +148,7 @@ def log(msg, lvl):
 
 
 def auto_segment_all_datasets():
+    setMaxRunNum()
     d = sys.argv[1]
     studies = next(os.walk(os.path.join(d, "train")))[1] + next(
         os.walk(os.path.join(d, "validate")))[1]
@@ -79,6 +172,7 @@ def auto_segment_all_datasets():
             studies = [str(x) for x in range(start, end)]
     if os.path.exists("output"):
         shutil.rmtree("output")
+        time.sleep(1)
     os.mkdir("output")
 
     accuracy_csv = open("accuracy.csv", "w")
@@ -92,8 +186,9 @@ def auto_segment_all_datasets():
             submit_csv.write(",")
         else:
             submit_csv.write("\n")
-
+    start_time_overall = timeit.default_timer()
     for s in studies:
+        start_time = timeit.default_timer()
         if int(s) <= 500:
             full_path = os.path.join(d, "train", s)
         else:
@@ -103,15 +198,22 @@ def auto_segment_all_datasets():
         print "Processing dataset %s..." % dset.name
         p_edv = 0
         p_esv = 0
+        dset.valid = True
         try:
             dset.load()
             segment_dataset(dset)
+            elapsed = timeit.default_timer() - start_time
+            dset.duration = int(elapsed)
             if dset.edv >= 600 or dset.esv >= 600:
                 raise Exception("Prediction too large")
             p_edv = dset.edv
             p_esv = dset.esv
         except Exception as e:
+            dset.valid = False
+            elapsed = timeit.default_timer() - start_time
+            dset.duration = int(elapsed)
             log("***ERROR***: Exception %s thrown by dataset %s" % (str(e), dset.name), 0)
+
         submit_csv.write("%d_systolic," % int(dset.name))
         for i in range(0, 600):
             if i < p_esv:
@@ -133,9 +235,15 @@ def auto_segment_all_datasets():
             else:
                 submit_csv.write(",")
         (edv, esv) = label_map.get(int(dset.name), (None, None))
+        dset.aedv = edv
+        dset.aesv = esv
         if edv is not None:
             accuracy_csv.write("%s,%f,%f,%f,%f\n" % (dset.name, edv, esv, p_edv, p_esv))
+        insertEntry(dset)
 
+    elapsed_overall = timeit.default_timer() - start_time_overall
+    avg_study_time = int(elapsed_overall / len(studies))
+    print "Run Number: {0};  Number of Studies processed: {1}; Number of seconds elapsed: {2}; average study time: {3}".format(RUN_NUM, len(studies), int(elapsed_overall), avg_study_time)
     accuracy_csv.close()
     submit_csv.close()
 
