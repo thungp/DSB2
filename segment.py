@@ -17,8 +17,10 @@ from scipy.stats import linregress
 from scipy.optimize import curve_fit
 from scipy.interpolate import UnivariateSpline
 
-
-#
+#ChangeLog
+# PT: Modified code entry to handle processing a range of studies between [1, 500)
+# Eg. argv ['D:/data/code/python/DSB2/segment.py', 'D:\\data\\datasets\\kaggle\\heart_disease','1', '3']
+# If the length is 4, then treat last two values start and end values of a range t
 # PARAMETERS
 #
 
@@ -65,9 +67,15 @@ def auto_segment_all_datasets():
         label_map[l[0]] = (l[2], l[1])
 
     num_samples = None
-    if len(sys.argv) > 2:
-        num_samples = int(sys.argv[2])
-        studies = random.sample(studies, num_samples)
+    argvlen = len(sys.argv)
+    if argvlen > 2:
+        if argvlen == 3:
+            num_samples = int(sys.argv[2])
+            studies = random.sample(studies, num_samples)
+        elif argvlen == 4:
+            start = int(sys.argv[2])
+            end = int(sys.argv[3])
+            studies = [str(x) for x in range(start, end)]
     if os.path.exists("output"):
         shutil.rmtree("output")
     os.mkdir("output")
